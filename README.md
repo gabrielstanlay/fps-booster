@@ -47,6 +47,14 @@ quantos itens foram apagados, quanto espaço foi liberado e quantos estavam em u
 - **Cor do menu** com seletor de cor: muda a cor de destaque padrão do menu.
 - **Modo RGB**: a cor do menu passa por todas as cores até ser desativada.
 
+## Como usar
+
+### Baixe o projeto
+
+Faça o download em ["releases"](https://github.com/gabrielstanlay/fps-booster/releases/) e execute o programa.
+
+Ou baixe o ZIP em **Code → Download ZIP** e extraia.
+
 ## Como compilar
 
 ### 1. Pré-requisitos
