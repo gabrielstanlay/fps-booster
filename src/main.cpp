@@ -8,6 +8,7 @@
 
 #include "cleaner.h"
 #include "menu.h"
+#include "optimizer.h"
 #include "theme.h"
 
 #include "imgui.h"
@@ -137,6 +138,7 @@ int main(int, char**)
     }
 
     shutdownCleaner();
+    shutdownOptimizer();
 
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();

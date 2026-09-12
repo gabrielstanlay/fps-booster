@@ -5,6 +5,7 @@
 
 #include "cleaner.h"
 #include "icons.h"
+#include "optimizer.h"
 #include "theme.h"
 
 #include "imgui.h"
@@ -42,6 +43,9 @@ namespace
     constexpr float kFontTitle      = 16.0f;    // titulo dos paineis
     constexpr float kFontSmall      = 13.0f;    // descricoes
     constexpr float kFontLogo       = 19.0f;    // nome do programa na barra de titulo
+
+    constexpr float kCardButton     = 28.0f;    // altura do botao dos cartoes
+    constexpr float kCardPadding    = 16.0f;    // margem interna dos cartoes
 
     constexpr float kRgbSpeed       = 0.15f;    // voltas por segundo do modo RGB
 
@@ -84,7 +88,7 @@ namespace
     //  Widgets
     // -----------------------------------------------------------------------
 
-    // Botao com a cor de destaque.
+    // Botão com a cor de destaque.
     bool accentButton(const char* label, const ImVec2& size)
     {
         ImGui::PushStyleColor(ImGuiCol_Button,        g_theme.accent);
@@ -96,7 +100,7 @@ namespace
         return pressed;
     }
 
-    // O botao e desenhado sem texto, e o icone e o texto sao escritos por cima,
+    // O botao é desenhado sem texto, e o icone e o texto sao escritos por cima,
     // medidos juntos para o conjunto ficar centralizado.
     bool accentIconButton(const char* id, const char* label, IconFunction icon, const ImVec2& size)
     {
@@ -181,7 +185,6 @@ namespace
         return changed;
     }
 
-    // Linha de texto pequena e discreta.
     void hintText(const ImVec4& color, const char* text)
     {
         ImGui::PushFont(nullptr, kFontSmall);
@@ -203,7 +206,7 @@ namespace
         float  height = 0.0f;
     };
 
-    // Desenha o nome, a descricao e a divisoria de uma linha, e deixa o cursor
+    // Desenha o nome, a descrição e a divisória de uma linha, e deixa o cursor
     // no lugar do controle da direita (interruptor, seletor de cor, etc).
     // Com 'warning', aparece um triangulo vermelho ao lado do nome que mostra
     // o texto do aviso quando o mouse passa por cima.
@@ -218,7 +221,7 @@ namespace
         const float padding   = px(kRowPadding);
         const float textWidth = row.width - controlWidth - px(20.0f);
 
-        // a altura depende da descricao, que pode ocupar mais de uma linha
+        // a altura depende da descrição, que pode ocupar mais de uma linha
         const float titleHeight = ImGui::GetTextLineHeight();
         float descriptionHeight = 0.0f;
         if (description != nullptr)
@@ -368,12 +371,154 @@ namespace
         ImGui::EndDisabled();
     }
 
-    void drawOptimizationPanel()
+    // -----------------------------------------------------------------------
+    //  Cartoes da aba de otimizacoes
+    // -----------------------------------------------------------------------
+    // cores da bolinha de situacao dos cartoes
+    constexpr unsigned int kStatusOk      = 0x16DB65;   // removivel e removido
+    constexpr unsigned int kStatusRunning = 0xFFC53D;   // removendo
+    constexpr unsigned int kStatusFailed  = 0xFC2D38;   // falhou
+
+    struct OptimizationCard
     {
-        hintText(g_theme.textDim, "As otimizacoes entram aqui.");
+        const char*  title;
+        const char*  description;
+        const char*  blocked;     // aviso quando o programa nao existe no Windows
+        Optimization item;
+    };
+
+    const OptimizationCard kOptimizationCards[] =
+    {
+        { "Remover Cortana",
+          "Remove a Cortana permanentemente do seu computador.",
+          "A Cortana não foi encontrada no seu computador.",
+          Optimization::removeCortana },
+
+        { "Remover Copilot",
+          "Remove o Copilot permanentemente do seu computador.",
+          "O Copilot não foi encontrado no seu computador.",
+          Optimization::removeCopilot },
+    };
+
+    // Um cartao: nome e descricao em cima, situacao e botao na base.
+    void drawOptimizationCard(const OptimizationCard& card, const ImVec2& size)
+    {
+        const OptimizationState state = optimizationState(card.item);
+        const bool running   = (state == OptimizationState::running);
+        const bool available = (state == OptimizationState::available || state == OptimizationState::failed);
+
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, g_theme.panel);
+        ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, px(kPanelRounding));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(px(kCardPadding), px(kCardPadding)));
+        ImGui::BeginChild(card.title, size, ImGuiChildFlags_Borders,
+                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        ImGui::PopStyleVar(2);
+        ImGui::PopStyleColor();
+
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(px(kItemSpacingX), px(4.0f)));
+
+        const float left         = ImGui::GetCursorPosX();
+        const float cardWidth    = ImGui::GetContentRegionAvail().x;
+        const float buttonWidth  = ImGui::CalcTextSize("Removendo...").x + px(28.0f);
+        const float buttonHeight = px(kCardButton);
+
+        ImGui::PushFont(g_fontBold, 0.0f);
+        ImGui::TextUnformatted(card.title);
+        ImGui::PopFont();
+
+        ImGui::PushFont(nullptr, kFontSmall);
+        ImGui::PushStyleColor(ImGuiCol_Text, g_theme.textDim);
+        ImGui::PushTextWrapPos(0.0f);
+        ImGui::TextUnformatted(card.description);
+        ImGui::PopTextWrapPos();
+        ImGui::PopStyleColor();
+        ImGui::PopFont();
+
+        const char* statusText  = "Pronto pra remover";
+        ImVec4      statusColor = hexColor(kStatusOk);
+        switch (state)
+        {
+        case OptimizationState::missing: statusText = "Não foi encontrado no seu computador.";      statusColor = g_theme.textDim;          break;
+        case OptimizationState::running: statusText = "Removendo...";                              statusColor = hexColor(kStatusRunning); break;
+        case OptimizationState::done:    statusText = "Removido. Reinicie o computador para concluir.";  statusColor = hexColor(kStatusOk);      break;
+        case OptimizationState::failed:  statusText = "Não foi possível remover.";                  statusColor = hexColor(kStatusFailed);  break;
+        default: break;
+        }
+
+        // base do cartao: situacao a esquerda, botao a direita
+        const float bottom = size.y - px(kCardPadding) - buttonHeight;
+
+        ImGui::PushFont(nullptr, kFontSmall);
+        const float dot          = px(3.5f);
+        const float textLeft     = left + dot * 2.0f + px(7.0f);
+        const float statusRight  = left + cardWidth - buttonWidth - px(12.0f);
+        const float statusHeight = ImGui::CalcTextSize(statusText, nullptr, false, statusRight - textLeft).y;
+
+        ImGui::SetCursorPos(ImVec2(left, bottom + (buttonHeight - statusHeight) * 0.5f));
+        const ImVec2 position = ImGui::GetCursorScreenPos();
+        ImGui::GetWindowDrawList()->AddCircleFilled(ImVec2(position.x + dot, position.y + ImGui::GetTextLineHeight() * 0.5f),
+                                                    dot, u32(statusColor));
+
+        ImGui::SetCursorPosX(textLeft);
+        ImGui::PushStyleColor(ImGuiCol_Text, statusColor);
+        ImGui::PushTextWrapPos(statusRight);
+        ImGui::TextUnformatted(statusText);
+        ImGui::PopTextWrapPos();
+        ImGui::PopStyleColor();
+        ImGui::PopFont();
+
+        ImGui::SetCursorPos(ImVec2(left + cardWidth - buttonWidth, bottom));
+        ImGui::BeginDisabled(!available || isOptimizing());
+        if (accentButton(running ? "Removendo..." : "Remover", ImVec2(buttonWidth, buttonHeight)))
+            startOptimization(card.item);
+        ImGui::EndDisabled();
+
+        if (state == OptimizationState::missing && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            ImGui::SetTooltip("%s", card.blocked);
+
+        ImGui::PopStyleVar();
+        ImGui::EndChild();
     }
 
-    // Fixa ou solta a janela na frente das outras.
+    // Distribui os cartoes em colunas, com rolagem quando nao couberem.
+    void drawOptimizationCards()
+    {
+        ImGui::BeginChild("##cartoes", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None);
+
+        const float spacing = px(kPanelSpacing);
+        const int   columns = kMaxColumns;
+        const float width   = (ImGui::GetContentRegionAvail().x - spacing * (columns - 1)) / columns;
+
+        // a maior descrição manda na altura, para os cartões ficarem iguais
+        const float titleHeight = ImGui::GetTextLineHeight();
+        float description = 0.0f;
+
+        ImGui::PushFont(nullptr, kFontSmall);
+        for (int i = 0; i < IM_ARRAYSIZE(kOptimizationCards); ++i)
+        {
+            const float height = ImGui::CalcTextSize(kOptimizationCards[i].description, nullptr, false,
+                                                     width - px(kCardPadding) * 2.0f).y;
+            if (height > description)
+                description = height;
+        }
+        ImGui::PopFont();
+
+        const ImVec2 size(width, px(kCardPadding) * 2.0f + titleHeight + px(4.0f) + description +
+                                 px(14.0f) + px(kCardButton));
+
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(spacing, spacing));
+        for (int i = 0; i < IM_ARRAYSIZE(kOptimizationCards); ++i)
+        {
+            if (i % columns != 0)
+                ImGui::SameLine();
+            drawOptimizationCard(kOptimizationCards[i], size);
+        }
+        ImGui::PopStyleVar();
+
+        ImGui::EndChild();
+    }
+
+    // Sobrepoem a janela na frente das outras.
     void applyPinWindow()
     {
         HWND handle = static_cast<HWND>(g_window->handle);
@@ -436,15 +581,14 @@ namespace
     {
         const char* id;         // identificador interno
         const char* title;      // titulo mostrado no topo do painel
-        void      (*draw)();    // conteudo (rola quando nao cabe)
+        void      (*draw)();    // conteudo (rola quando não cabe)
         void      (*footer)();  // rodape fixo, ou nullptr se nao tiver
     };
 
     const Panel kCleaningPanels[]     = { { "cleaning",     "Limpeza",       drawCleaningPanel,     drawCleaningFooter } };
-    const Panel kOptimizationPanels[] = { { "optimization", "Otimizações",   drawOptimizationPanel, nullptr } };
     const Panel kSettingsPanels[]     = { { "configs",      "Configurações", drawConfigsPanel,      nullptr } };
 
-    // Abre um painel: fundo proprio, titulo, divisoria e area rolavel.
+    // Painel: fundo proprio, titulo, divisoria e area rolavel.
     void beginPanel(const char* id, const char* title, const ImVec2& size, float footerHeight)
     {
         ImGui::PushStyleColor(ImGuiCol_ChildBg, g_theme.panel);
@@ -457,7 +601,7 @@ namespace
 
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(px(kItemSpacingX), px(kItemSpacingY)));
 
-        // titulo e divisoria com espacamento proprio, para ficarem bem juntos
+        // Titulo e divisória com espacamento proprio, para ficarem bem juntos
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(px(kItemSpacingX), 0.0f));
         ImGui::PushFont(g_fontBold, kFontTitle);
         ImGui::TextUnformatted(title);
@@ -468,13 +612,12 @@ namespace
         ImGui::Dummy(ImVec2(0.0f, px(2.0f)));
         ImGui::PopStyleVar();
 
-        // area dos itens: ganha scrollbar sozinha quando o conteudo nao cabe
         ImGui::BeginChild("##items", ImVec2(0.0f, -footerHeight), ImGuiChildFlags_None);
     }
 
     void endPanel(void (*footer)())
     {
-        ImGui::EndChild();      // area dos itens
+        ImGui::EndChild();
 
         if (footer != nullptr)
         {
@@ -483,10 +626,10 @@ namespace
         }
 
         ImGui::PopStyleVar();
-        ImGui::EndChild();      // painel
+        ImGui::EndChild();
     }
 
-    // Distribui os paineis em colunas, com o mesmo espacamento entre eles.
+    // Distribui os paineis em colunas, com o mesmo espaçamento entre eles.
     void drawPanels(const Panel* panels, int count)
     {
         if (count <= 0)
@@ -518,7 +661,7 @@ namespace
     //  Coluna das tabs
     // -----------------------------------------------------------------------
 
-    // Uma tab lateral: icone centralizado, fundo animado e barra de destaque.
+    // Tab lateral:
     bool tabButton(const char* id, IconFunction icon, bool selected, const char* tooltip)
     {
         const ImVec2 size(ImGui::GetContentRegionAvail().x, px(kTabHeight));
@@ -586,7 +729,6 @@ namespace
     //  Barra de titulo
     // -----------------------------------------------------------------------
 
-    // Move a janela enquanto o usuario arrasta o ultimo item criado.
     void dragWindow()
     {
         static bool  dragging = false;
@@ -688,7 +830,7 @@ namespace
         ImGui::PushFont(nullptr, kFontSmall);
         ImGui::SetCursorPos(ImVec2(afterTitle + px(8.0f), (height - ImGui::GetTextLineHeight()) * 0.5f));
         ImGui::PushStyleColor(ImGuiCol_Text, g_theme.textDim);
-        ImGui::TextUnformatted("alpha v0.0.5");
+        ImGui::TextUnformatted("alpha v0.1.0");
         ImGui::PopStyleColor();
         ImGui::PopFont();
 
@@ -716,7 +858,7 @@ namespace
         switch (g_tab)
         {
         case Tab::cleaning:     drawPanels(kCleaningPanels,     IM_ARRAYSIZE(kCleaningPanels));     break;
-        case Tab::optimization: drawPanels(kOptimizationPanels, IM_ARRAYSIZE(kOptimizationPanels)); break;
+        case Tab::optimization: drawOptimizationCards();                                            break;
         case Tab::settings:     drawPanels(kSettingsPanels,     IM_ARRAYSIZE(kSettingsPanels));     break;
         }
 

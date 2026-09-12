@@ -8,7 +8,7 @@
 ![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=flat-square&logo=windows&logoColor=white)
 ![Dear ImGui](https://img.shields.io/badge/Dear%20ImGui-1.92.9b-FF143D?style=flat-square)
 ![DirectX 11](https://img.shields.io/badge/DirectX-11-107C10?style=flat-square)
-![Status](https://img.shields.io/badge/status-alpha%20v0.0.5-FF143D?style=flat-square)
+![Status](https://img.shields.io/badge/status-alpha%20v0.1.0-FF143D?style=flat-square)
 
 <img src="assets/preview.png" width="840" alt="Tela de limpeza do FPS Booster">
 
@@ -40,6 +40,20 @@ Quando minimizado, o consumo de memória fica em torno de 3 MB, enquanto CPU e G
 
 Você marca o que quer limpar e clica em **Limpar selecionados**. No fim aparece
 quantos itens foram apagados, quanto espaço foi liberado e quantos estavam em uso.
+
+### Otimizações
+
+| Função | O que faz |
+|---|---|
+| **Remover Cortana** | Desinstala a Cortana de todos os usuários, tira ela da imagem do Windows e bloqueia a volta por política. |
+| **Remover Copilot** | Desinstala o Copilot, tira o botão da barra de tarefas e bloqueia a volta por política. |
+
+Cada função tem um cartão com um botão. Quando o programa não existe na sua
+versão do Windows, o botão fica bloqueado e explica o motivo ao passar o mouse.
+
+<div align="center">
+<img src="assets/otimizacoes.png" width="840" alt="Tela de otimizações do FPS Booster">
+</div>
 
 ### Configurações
 
@@ -123,7 +137,7 @@ fim do `src/menu.cpp`, com um comentário em cada linha dizendo o que ela pinta.
 
 - [x] Limpeza de temporários, Prefetch e cache de miniaturas
 - [x] Personalização de cor e modo RGB
-- [ ] Aba de otimizações
+- [x] Debloat: remover Cortana e Copilot
 - [ ] Nova interface
 
 ## Licença

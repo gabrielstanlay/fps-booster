@@ -4,7 +4,7 @@ title Boost - compilar
 cd /d "%~dp0"
 
 echo ==================================================
-echo   Boost - compilando a source
+echo   FPS Booster - compilando a source
 echo ==================================================
 echo.
 
@@ -43,7 +43,7 @@ cl.exe /nologo /std:c++17 /EHsc /MT /MP /O2 /W3 /utf-8 ^
     /DNDEBUG /DUNICODE /D_UNICODE /D_CRT_SECURE_NO_WARNINGS ^
     /I"." /I"backends" /I"src" ^
     /Fobuild\obj\ /Febuild\fpsbooster.exe ^
-    src\main.cpp src\menu.cpp src\theme.cpp src\icons.cpp src\cleaner.cpp ^
+    src\main.cpp src\menu.cpp src\theme.cpp src\icons.cpp src\cleaner.cpp src\optimizer.cpp ^
     imgui.cpp imgui_draw.cpp imgui_tables.cpp imgui_widgets.cpp ^
     backends\imgui_impl_win32.cpp backends\imgui_impl_dx11.cpp build\obj\version.res ^
     /link /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup ^
@@ -55,7 +55,7 @@ if errorlevel 1 goto :erro_compilacao
 
 echo.
 echo ==================================================
-echo   [OK] pronto: build\fpsbooster.exe
+echo   [OK] Compilado em: build\fpsbooster.exe
 echo ==================================================
 echo.
 choice /c SN /n /m "Abrir o programa agora? [S/N] "
