@@ -23,10 +23,6 @@ O projeto foi desenvolvido com foco em baixo consumo de recursos. O objetivo é 
 praticamente imperceptível enquanto estiver em execução, com uso mínimo de memória, CPU e GPU. 
 Quando minimizado, o consumo de memória fica em torno de 3 MB, enquanto CPU e GPU permanecem em 0%.
 
-<div align="center">
-<img src="assets/configuracoes.png" width="840" alt="Tela de configurações do FPS Booster">
-</div>
-
 ## Funcionalidades
 
 ### Limpeza
@@ -60,6 +56,10 @@ versão do Windows, o botão fica bloqueado e explica o motivo ao passar o mouse
 - **Fixar janela**: fixa na frente dos outros programas.
 - **Cor do menu** com seletor de cor: muda a cor de destaque padrão do menu.
 - **Modo RGB**: a cor do menu passa por todas as cores até ser desativada.
+
+<div align="center">
+<img src="assets/configuracoes.png" width="840" alt="Tela de configurações do FPS Booster">
+</div>
 
 ## Como usar?
 
