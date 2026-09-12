@@ -51,7 +51,7 @@ quantos itens foram apagados, quanto espaço foi liberado e quantos estavam em u
 
 ### Baixe o projeto
 
-Faça o download em ["releases"](https://github.com/gabrielstanlay/fps-booster/releases/) e execute o programa.
+Faça o download em [Releases](https://github.com/gabrielstanlay/fps-booster/releases/) e execute o programa.
 
 Ou baixe o ZIP em **Code → Download ZIP** e extraia.
 
