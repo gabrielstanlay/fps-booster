@@ -55,7 +55,6 @@ Faça o download em [Releases](https://github.com/gabrielstanlay/fps-booster/rel
 
 > **O programa pede permissão de administrador toda vez que abre.** Sem isso o
 > Windows não deixa apagar nada dentro de `C:\Windows\Temp` nem do `Prefetch`.
-
 >Ao limpar o cache de screenshots, a barra de tarefas pisca por um instante. Isso
 >é normal: o Explorador de Arquivos mantém esses arquivos abertos, então ele é
 >fechado e reaberto durante a limpeza.
