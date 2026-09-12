@@ -1,0 +1,10 @@
+# saida da compilacao
+build/
+
+# arquivos do Visual Studio / VS Code
+.vs/
+*.user
+*.suo
+*.pdb
+*.ilk
+*.obj
