@@ -47,15 +47,20 @@ quantos itens foram apagados, quanto espaço foi liberado e quantos estavam em u
 - **Cor do menu** com seletor de cor: muda a cor de destaque padrão do menu.
 - **Modo RGB**: a cor do menu passa por todas as cores até ser desativada.
 
-## Como usar
+## Como usar?
 
 ### Baixe o projeto
 
 Faça o download em [Releases](https://github.com/gabrielstanlay/fps-booster/releases/) e execute o programa.
 
-Ou baixe o ZIP em **Code → Download ZIP** e extraia.
+> **O programa pede permissão de administrador toda vez que abre.** Sem isso o
+> Windows não deixa apagar nada dentro de `C:\Windows\Temp` nem do `Prefetch`.
 
-## Como compilar
+Ao limpar o cache de screenshots, a barra de tarefas pisca por um instante. Isso
+é normal: o Explorador de Arquivos mantém esses arquivos abertos, então ele é
+fechado e reaberto durante a limpeza.
+
+## Como compilar?
 
 ### 1. Pré-requisitos
 
@@ -87,17 +92,6 @@ programa. O executável fica em `build\fpsbooster.exe`.
 |---|---|
 | `Nao encontrei o compilador MSVC` | Instale os Build Tools com a carga de trabalho de C++ e rode o `build.bat` de novo. |
 | `LNK1104: não é possível abrir o arquivo build\fpsbooster.exe` | O programa está aberto. Feche e compile de novo. |
-
-## Como usar
-
-Abra o `build\fpsbooster.exe` e aceite o aviso do Windows.
-
-> **O programa pede permissão de administrador toda vez que abre.** Sem isso o
-> Windows não deixa apagar nada dentro de `C:\Windows\Temp` nem do `Prefetch`.
-
-Ao limpar o cache de screenshots, a barra de tarefas pisca por um instante. Isso
-é normal: o Explorador de Arquivos mantém esses arquivos abertos, então ele é
-fechado e reaberto durante a limpeza.
 
 ## Estrutura do projeto
 
