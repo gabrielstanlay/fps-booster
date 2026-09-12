@@ -16,16 +16,12 @@
 
 ## Sobre
 
-O FPS Booster limpa o lixo que o Windows vai acumulando com o uso: arquivos
-temporários, rastros do Prefetch e cache de miniaturas. Tudo roda em segundo
-plano, então a janela nunca trava, e nenhum arquivo em uso é forçado.
+O FPS Booster é uma ferramenta para limpar arquivos que o Windows acumula durante o uso, 
+incluindo arquivos temporários, Prefetch e cache de miniaturas e screenshots.
 
-A interface não usa nada pronto. A janela não tem borda do Windows, a barra de
-título é desenhada pelo próprio programa e todos os ícones são traçados em vetor
-em tempo de execução, sem fonte de ícones e sem imagens.
-
-Minimizado, o programa devolve a memória ao Windows e fica em torno de 3 MB, sem
-uso de CPU nem de GPU.
+O projeto foi desenvolvido com foco em baixo consumo de recursos. O objetivo é manter o programa 
+praticamente imperceptível enquanto estiver em execução, com uso mínimo de memória, CPU e GPU. 
+Quando minimizado, o consumo de memória fica em torno de 3 MB, enquanto CPU e GPU permanecem em 0%.
 
 <div align="center">
 <img src="assets/configuracoes.png" width="840" alt="Tela de configurações do FPS Booster">
@@ -37,19 +33,19 @@ uso de CPU nem de GPU.
 
 | Função | O que faz |
 |---|---|
-| **Limpar arquivos temporários** | Apaga o conteúdo de `%temp%` e de `C:\Windows\Temp`. As pastas são mantidas. |
-| **Limpar prefetch** | Apaga os arquivos `.pf` de `C:\Windows\Prefetch`. O `layout.ini` e a pasta `ReadyBoot` não são tocados. |
+| **Limpar arquivos temporários** | Apaga os arquivos de `C:\Windows\Temp` e `%temp%`. |
+| **Limpar prefetch** | Apaga os arquivos de `C:\Windows\Prefetch`. |
 | **Limpar cache de screenshots** | Apaga as miniaturas do Explorador de Arquivos e as capturas temporárias da Ferramenta de Captura. |
-| **Esvaziar lixeira** | Esvazia a Lixeira do Windows. Vem desligada por padrão. |
+| **Esvaziar lixeira** | Esvazia a Lixeira do Windows. |
 
 Você marca o que quer limpar e clica em **Limpar selecionados**. No fim aparece
 quantos itens foram apagados, quanto espaço foi liberado e quantos estavam em uso.
 
-### Interface
+### Configurações
 
+- **Fixar janela**: fixa na frente dos outros programas.
 - **Cor do menu** com seletor de cor: muda a cor de destaque padrão do menu.
 - **Modo RGB**: a cor do menu passa por todas as cores até ser desativada.
-- **Fixar janela**: fixa na frente dos outros programas.
 
 ## Como compilar
 
@@ -65,7 +61,7 @@ Nada mais precisa ser instalado: o Dear ImGui já vem junto no repositório.
 ### 2. Baixar o projeto
 
 ```bash
-git clone https://github.com/SEU-USUARIO/fps-booster.git
+git clone https://github.com/gabrielstanlay/fps-booster
 ```
 
 Ou baixe o ZIP em **Code → Download ZIP** e extraia.
@@ -127,7 +123,7 @@ fim do `src/menu.cpp`, com um comentário em cada linha dizendo o que ela pinta.
 - [x] Limpeza de temporários, Prefetch e cache de miniaturas
 - [x] Personalização de cor e modo RGB
 - [ ] Aba de otimizações
-- [ ] Salvar as preferências entre sessões
+- [ ] Nova interface
 
 ## Licença
 
