@@ -1,28 +1,45 @@
 #pragma once
 
+#include <string>
+
 // ---------------------------------------------------------------------------
-//  Funcoes de debloat do Windows.
+//  Sistema de otimizacoes: alterações persistentes no Windows (debloat).
+//
+//  Cada tweak e descrito numa tabela dentro do optimizer.cpp. O menu nao conhece
+//  os tweaks um a um: pergunta quantos existem e pede os dados de cada um. Para
+//  adicionar um debloat novo, basta uma linha nessa tabela.
 // ---------------------------------------------------------------------------
 
-enum class Optimization
+// Cor do circulo e do texto de situação de um cartão.
+enum class CardTone
 {
-    removeCortana,
-    removeCopilot,
+    neutral,   // cinza
+    good,      // verde
+    busy,      // amarelo
+    bad,       // vermelho
 };
 
-// Situacao de uma funcao, usada para montar o cartao dela no menu.
-enum class OptimizationState
+// Situação dinamica de um cartão (muda conforme a ação roda).
+struct CardInfo
 {
-    available,   // o programa esta instalado e pode ser removido
-    missing,     // nao existe nesta instalacao do Windows
-    running,     // removendo agora
-    done,        // removido nesta sessao
-    failed,      // a remocao nao deu certo
+    CardTone    tone          = CardTone::neutral;
+    std::string status;                             // texto de situação
+    const char* buttonLabel   = "";                 // texto do botão
+    bool        buttonEnabled = false;              // botão clicavel
+    const char* tooltip       = nullptr;            // aviso quando o botão esta bloqueado
 };
 
-OptimizationState optimizationState(Optimization item);
+// Descrição estatica de um cartão (nome + explicação).
+struct OptimizationCard
+{
+    const char* title       = "";
+    const char* description = "";
+};
 
-// --- execucao em segundo plano, para nao travar o menu ---------------------
-void startOptimization(Optimization item);   // dispara a remocao numa thread
-bool isOptimizing();                         // true enquanto alguma esta rodando
-void shutdownOptimizer();                    // espera a thread terminar (ao sair)
+int              optimizationCount();               // quantos tweaks existem
+OptimizationCard optimizationCard(int index);       // nome e descrição (estaticos)
+CardInfo         optimizationInfo(int index);       // situação (dinamica)
+
+void startOptimization(int index);   // dispara a ação numa thread
+bool isOptimizing();                 // true enquanto alguma ação roda
+void shutdownOptimizer();            // espera a thread terminar (ao sair)

@@ -8,7 +8,7 @@
 ![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?style=flat-square&logo=windows&logoColor=white)
 ![Dear ImGui](https://img.shields.io/badge/Dear%20ImGui-1.92.9b-FF143D?style=flat-square)
 ![DirectX 11](https://img.shields.io/badge/DirectX-11-107C10?style=flat-square)
-![Status](https://img.shields.io/badge/status-alpha%20v0.1.0-FF143D?style=flat-square)
+![Status](https://img.shields.io/badge/status-alpha%20v0.1.5-FF143D?style=flat-square)
 
 <img src="assets/preview.png" width="840" alt="Tela de limpeza do FPS Booster">
 
@@ -41,11 +41,12 @@ quantos itens foram apagados, quanto espaço foi liberado e quantos estavam em u
 
 | Função | O que faz |
 |---|---|
-| **Remover Cortana** | Desinstala a Cortana de todos os usuários, tira ela da imagem do Windows e bloqueia a volta por política. |
-| **Remover Copilot** | Desinstala o Copilot, tira o botão da barra de tarefas e bloqueia a volta por política. |
+| **Remover Cortana** | Remove a Cortana permanentemente do seu computador  e bloqueia a volta. |
+| **Remover Copilot** | Remove o Copilot permanentemente do seu computador  e bloqueia a volta. |
+| **Remover Game Bar** | Remove o Game Bar do Xbox permanentemente do seu computador e bloqueia a volta. |
 
-Cada função tem um cartão com um botão. Quando o programa não existe na sua
-versão do Windows, o botão fica bloqueado e explica o motivo ao passar o mouse.
+Cada função tem um cartão com um botão. Quando o programa não é encontrado no
+seu computador, o botão fica bloqueado e explica o motivo ao passar o mouse.
 
 <div align="center">
 <img src="assets/otimizacoes.png" width="840" alt="Tela de otimizações do FPS Booster">
@@ -135,10 +136,11 @@ fim do `src/menu.cpp`, com um comentário em cada linha dizendo o que ela pinta.
 
 ## Roadmap
 
-- [x] Limpeza de temporários, Prefetch e cache de miniaturas
-- [x] Personalização de cor e modo RGB
-- [x] Debloat: remover Cortana e Copilot
-- [ ] Nova interface
+- [x] Limpeza de arquivos temporários, Prefetch e cache de miniaturas
+- [x] Personalização da cor do menu e modo RGB
+- [x] Debloat: remover Cortana, Copilot e Game Bar
+- [ ] Adicionar aba "Restauração" para criar um ponto de restauração
+- [ ] Interface retrabalhada
 
 ## Licença
 

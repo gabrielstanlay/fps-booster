@@ -14,7 +14,63 @@
 
 namespace
 {
-    // Um pacote do Windows: o nome e usado no PowerShell, a familia na checagem.
+    std::thread       g_worker;
+    std::atomic<bool> g_busy{ false };
+
+    // Roda um script do PowerShell sem janela e espera terminar.
+    // Devolve o codigo de saida do processo, ou -1 se nem abriu / travou.
+    int runPowerShell(const std::wstring& script)
+    {
+        std::wstring command = L"powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"";
+        command += script;
+        command += L"\"";
+
+        std::vector<wchar_t> buffer(command.begin(), command.end());
+        buffer.push_back(L'\0');
+
+        STARTUPINFOW startup = {};
+        startup.cb          = sizeof(startup);
+        startup.dwFlags     = STARTF_USESHOWWINDOW;
+        startup.wShowWindow = SW_HIDE;
+        PROCESS_INFORMATION process = {};
+
+        if (!::CreateProcessW(nullptr, buffer.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW,
+                              nullptr, nullptr, &startup, &process))
+            return -1;
+
+        const DWORD wait = ::WaitForSingleObject(process.hProcess, 180000);
+        DWORD exitCode = static_cast<DWORD>(-1);
+        if (wait == WAIT_OBJECT_0)
+            ::GetExitCodeProcess(process.hProcess, &exitCode);
+        else
+            ::TerminateProcess(process.hProcess, 1);
+
+        ::CloseHandle(process.hThread);
+        ::CloseHandle(process.hProcess);
+        return static_cast<int>(exitCode);
+    }
+
+    // -----------------------------------------------------------------------
+    //  Registro
+    // -----------------------------------------------------------------------
+    bool setPolicy(HKEY root, const wchar_t* path, const wchar_t* value, DWORD data)
+    {
+        HKEY key = nullptr;
+        if (::RegCreateKeyExW(root, path, 0, nullptr, 0, KEY_SET_VALUE | KEY_WOW64_64KEY,
+                              nullptr, &key, nullptr) != ERROR_SUCCESS)
+            return false;
+
+        const LSTATUS status = ::RegSetValueExW(key, value, 0, REG_DWORD,
+                                                reinterpret_cast<const BYTE*>(&data), sizeof(data));
+        ::RegCloseKey(key);
+        return status == ERROR_SUCCESS;
+    }
+
+    // -----------------------------------------------------------------------
+    //  Remocao de pacotes appx
+    // -----------------------------------------------------------------------
+    enum class RemoveState { available, missing, running, done, failed };
+
     struct AppxTarget
     {
         const wchar_t* name;
@@ -32,13 +88,12 @@ namespace
         { L"Microsoft.Windows.Ai.Copilot.Provider", L"Microsoft.Windows.Ai.Copilot.Provider_cw5n1h2txyewy" },
     };
 
-    std::thread       g_worker;
-    std::atomic<bool> g_busy{ false };
-    std::atomic<OptimizationState> g_cortana{ OptimizationState::missing };
-    std::atomic<OptimizationState> g_copilot{ OptimizationState::missing };
-    std::atomic<bool> g_checked{ false };
+    const AppxTarget kGameBarTargets[] =
+    {
+        { L"Microsoft.XboxGamingOverlay", L"Microsoft.XboxGamingOverlay_8wekyb3d8bbwe" },
+        { L"Microsoft.XboxGameOverlay",   L"Microsoft.XboxGameOverlay_8wekyb3d8bbwe" },
+    };
 
-    // O pacote esta instalado para o usuario atual?
     bool packageInstalled(const wchar_t* family)
     {
         UINT32 count  = 0;
@@ -56,51 +111,6 @@ namespace
         return false;
     }
 
-    // Refaz a checagem de quais programas ainda estao instalados.
-    void refreshStates()
-    {
-        if (g_cortana.load() != OptimizationState::running)
-            g_cortana.store(anyInstalled(kCortanaTargets, static_cast<int>(std::size(kCortanaTargets)))
-                            ? OptimizationState::available : OptimizationState::missing);
-
-        if (g_copilot.load() != OptimizationState::running)
-            g_copilot.store(anyInstalled(kCopilotTargets, static_cast<int>(std::size(kCopilotTargets)))
-                            ? OptimizationState::available : OptimizationState::missing);
-
-        g_checked.store(true);
-    }
-
-    // Roda um script do PowerShell escondido e espera ele terminar.
-    bool runPowerShell(const std::wstring& script)
-    {
-        std::wstring command = L"powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"";
-        command += script;
-        command += L"\"";
-
-        std::vector<wchar_t> buffer(command.begin(), command.end());
-        buffer.push_back(L'\0');
-
-        STARTUPINFOW startup = {};
-        startup.cb          = sizeof(startup);
-        startup.dwFlags     = STARTF_USESHOWWINDOW;
-        startup.wShowWindow = SW_HIDE;
-        PROCESS_INFORMATION process = {};
-
-        if (!::CreateProcessW(nullptr, buffer.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW,
-                              nullptr, nullptr, &startup, &process))
-            return false;
-
-        const DWORD wait = ::WaitForSingleObject(process.hProcess, 180000);
-        if (wait == WAIT_TIMEOUT)
-            ::TerminateProcess(process.hProcess, 1);
-
-        ::CloseHandle(process.hThread);
-        ::CloseHandle(process.hProcess);
-        return wait == WAIT_OBJECT_0;
-    }
-
-    // Desinstala os pacotes para todos os usuarios e tira eles da imagem do
-    // Windows, para nao voltarem em contas novas.
     bool removeTargets(const AppxTarget* targets, int count)
     {
         std::wstring script;
@@ -110,33 +120,18 @@ namespace
             script += L"Get-AppxPackage -AllUsers -Name '" + name + L"' | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue; ";
             script += L"Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -eq '" + name + L"' } | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue; ";
         }
-
         runPowerShell(script);
-
-        // o que vale e o resultado: o pacote sumiu ou nao
         return !anyInstalled(targets, count);
     }
 
-    bool setPolicy(HKEY root, const wchar_t* path, const wchar_t* value, DWORD data)
-    {
-        HKEY key = nullptr;
-        if (::RegCreateKeyExW(root, path, 0, nullptr, 0, KEY_SET_VALUE | KEY_WOW64_64KEY,
-                              nullptr, &key, nullptr) != ERROR_SUCCESS)
-            return false;
-
-        const LSTATUS status = ::RegSetValueExW(key, value, 0, REG_DWORD,
-                                                reinterpret_cast<const BYTE*>(&data), sizeof(data));
-        ::RegCloseKey(key);
-        return status == ERROR_SUCCESS;
-    }
-
-    // Politicas que impedem a Cortana de voltar.
+    // -----------------------------------------------------------------------
+    //  Permanencia por registro (impede a volta do que foi removido)
+    // -----------------------------------------------------------------------
     void blockCortana()
     {
         setPolicy(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search", L"AllowCortana", 0);
     }
 
-    // Politicas que desligam o Copilot e tiram o botao da barra de tarefas.
     void blockCopilot()
     {
         setPolicy(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsCopilot", L"TurnOffWindowsCopilot", 1);
@@ -144,47 +139,118 @@ namespace
         setPolicy(HKEY_CURRENT_USER,  L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", L"ShowCopilotButton", 0);
     }
 
-    std::atomic<OptimizationState>& stateOf(Optimization item)
+    // Desliga o Game DVR/gravacao em segundo plano, para a Game Bar nao voltar a
+    // operar mesmo que algum componente do sistema seja reinstalado.
+    void blockGameBar()
     {
-        return (item == Optimization::removeCortana) ? g_cortana : g_copilot;
+        setPolicy(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Policies\\Microsoft\\Windows\\GameDVR", L"AllowGameDVR", 0);
+        setPolicy(HKEY_CURRENT_USER,  L"System\\GameConfigStore", L"GameDVR_Enabled", 0);
+        setPolicy(HKEY_CURRENT_USER,  L"Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR", L"AppCaptureEnabled", 0);
+    }
+
+    // =======================================================================
+    //  Tabela de tweaks
+    // =======================================================================
+    struct RemovalTweak
+    {
+        const char* title;
+        const char* description;
+        const char* missingMessage; // tooltip quando nao esta instalado
+        const AppxTarget* targets;
+        int targetCount;
+        void (*block)(); // permanencia por registro
+    };
+
+    const RemovalTweak kRemovals[] =
+    {
+        { "Remover Cortana", "Remove a Cortana permanentemente do seu computador.",
+          "A Cortana não foi encontrada no seu computador.",
+          kCortanaTargets, static_cast<int>(std::size(kCortanaTargets)), blockCortana },
+
+        { "Remover Copilot", "Remove o Copilot permanentemente do seu computador.",
+          "O Copilot não foi encontrado no seu computador.",
+          kCopilotTargets, static_cast<int>(std::size(kCopilotTargets)), blockCopilot },
+
+        { "Remover Game Bar", "Remove a Game Bar do Xbox permanentemente do seu computador.",
+          "A Game Bar não foi encontrada no seu computador.",
+          kGameBarTargets, static_cast<int>(std::size(kGameBarTargets)), blockGameBar },
+    };
+
+    constexpr int kCount = static_cast<int>(std::size(kRemovals));
+
+    std::atomic<RemoveState> g_state[kCount];
+    std::atomic<bool>        g_checked{ false };
+
+    // Detecta uma vez o que esta instalado (FindPackagesByPackageFamily por tweak).
+    void detectStates()
+    {
+        for (int i = 0; i < kCount; ++i)
+            if (g_state[i].load() != RemoveState::running)
+                g_state[i].store(anyInstalled(kRemovals[i].targets, kRemovals[i].targetCount)
+                                 ? RemoveState::available : RemoveState::missing);
+        g_checked.store(true);
+    }
+
+    CardInfo cardFor(int index)
+    {
+        if (!g_checked.load())
+            detectStates();
+
+        CardInfo info;
+        info.buttonLabel = "Remover";
+        switch (g_state[index].load())
+        {
+        case RemoveState::available: info.tone = CardTone::good;    info.status = "Pronto pra remover";                 info.buttonEnabled = true;  break;
+        case RemoveState::running:   info.tone = CardTone::busy;    info.status = "Removendo...";                       info.buttonEnabled = false; break;
+        case RemoveState::done:      info.tone = CardTone::good;    info.status = "Removido. Reinicie o computador para concluir."; info.buttonEnabled = false; break;
+        case RemoveState::failed:    info.tone = CardTone::bad;     info.status = "Não foi possível remover.";          info.buttonEnabled = true;  break;
+        case RemoveState::missing:
+        default:                     info.tone = CardTone::neutral; info.status = "Não foi encontrado no seu computador.";
+                                     info.buttonEnabled = false;    info.tooltip = kRemovals[index].missingMessage;     break;
+        }
+        return info;
     }
 }
 
-OptimizationState optimizationState(Optimization item)
+int optimizationCount()
 {
-    if (!g_checked.load())
-        refreshStates();
-
-    return stateOf(item).load();
+    return kCount;
 }
 
-void startOptimization(Optimization item)
+OptimizationCard optimizationCard(int index)
 {
-    if (g_busy.load() || optimizationState(item) != OptimizationState::available)
+    if (index < 0 || index >= kCount)
+        return {};
+    return { kRemovals[index].title, kRemovals[index].description };
+}
+
+CardInfo optimizationInfo(int index)
+{
+    if (index < 0 || index >= kCount)
+        return {};
+    return cardFor(index);
+}
+
+void startOptimization(int index)
+{
+    if (index < 0 || index >= kCount)
+        return;
+    if (g_busy.load() || !optimizationInfo(index).buttonEnabled)
         return;
 
     if (g_worker.joinable())
         g_worker.join();
 
     g_busy.store(true);
-    stateOf(item).store(OptimizationState::running);
+    g_state[index].store(RemoveState::running);
 
-    g_worker = std::thread([item]()
+    g_worker = std::thread([index]()
     {
-        bool removed = false;
-
-        if (item == Optimization::removeCortana)
-        {
-            removed = removeTargets(kCortanaTargets, static_cast<int>(std::size(kCortanaTargets)));
-            blockCortana();
-        }
-        else
-        {
-            removed = removeTargets(kCopilotTargets, static_cast<int>(std::size(kCopilotTargets)));
-            blockCopilot();
-        }
-
-        stateOf(item).store(removed ? OptimizationState::done : OptimizationState::failed);
+        const RemovalTweak& tweak = kRemovals[index];
+        const bool removed = removeTargets(tweak.targets, tweak.targetCount);
+        if (tweak.block != nullptr)
+            tweak.block();
+        g_state[index].store(removed ? RemoveState::done : RemoveState::failed);
         g_busy.store(false);
     });
 }

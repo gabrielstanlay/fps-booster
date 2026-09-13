@@ -50,6 +50,6 @@ ImVec4 mixColor(const ImVec4& a, const ImVec4& b, float t);
 // Aplica as cores e o estilo do g_theme dentro do ImGui.
 void applyTheme();
 
-// Troca a cor principal do menu em tempo real (destaque + interruptores).
+// Troca a cor principal do menu em tempo real.
 // Usada pelo seletor de cor da aba de configuracoes.
 void setAccentColor(const ImVec4& color);

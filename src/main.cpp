@@ -1,8 +1,3 @@
-// ---------------------------------------------------------------------------
-//  FPS Booster - otimizador de PC
-//  Janela Win32 + DirectX 11 + Dear ImGui
-// ---------------------------------------------------------------------------
-
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 
@@ -18,7 +13,6 @@
 #include <d3d11.h>
 #include <windows.h>
 
-// Direct3D
 static ID3D11Device*           g_device            = nullptr;
 static ID3D11DeviceContext*    g_deviceContext     = nullptr;
 static IDXGISwapChain*         g_swapChain         = nullptr;
@@ -150,9 +144,6 @@ int main(int, char**)
     return 0;
 }
 
-// ---------------------------------------------------------------------------
-//  Direct3D
-// ---------------------------------------------------------------------------
 static bool CreateDeviceD3D(HWND window)
 {
     DXGI_SWAP_CHAIN_DESC description = {};
@@ -208,9 +199,6 @@ static void CleanupRenderTarget()
     if (g_renderTarget) { g_renderTarget->Release(); g_renderTarget = nullptr; }
 }
 
-// ---------------------------------------------------------------------------
-//  Mensagens da janela
-// ---------------------------------------------------------------------------
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND window, UINT message, WPARAM wParam, LPARAM lParam);
 
 static LRESULT WINAPI WndProc(HWND window, UINT message, WPARAM wParam, LPARAM lParam)
@@ -228,7 +216,7 @@ static LRESULT WINAPI WndProc(HWND window, UINT message, WPARAM wParam, LPARAM l
         return 0;
 
     case WM_SYSCOMMAND:
-        if ((wParam & 0xFFF0) == SC_KEYMENU)    // desativa o menu do ALT
+        if ((wParam & 0xFFF0) == SC_KEYMENU)
             return 0;
         break;
 

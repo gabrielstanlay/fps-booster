@@ -6,7 +6,6 @@ namespace
 {
     constexpr float kPi = 3.14159265358979f;
 
-    // Converte coordenadas locais (-0.5 .. 0.5) para a tela.
     ImVec2 point(const ImVec2& center, float size, float x, float y)
     {
         return ImVec2(center.x + x * size, center.y + y * size);
@@ -21,7 +20,7 @@ namespace
 
 namespace icons
 {
-    // Pincel de limpeza inclinado a 45 graus, em contorno (mesmo estilo dos outros).
+    // Pincel de limpeza inclinado a 45 graus:
     void brush(ImDrawList* draw, ImVec2 center, float size, ImU32 color)
     {
         const float diagonal = 0.70710678f;             // cos/sen de 45 graus
@@ -48,14 +47,14 @@ namespace icons
         draw->AddLine(at(-0.06f, 0.0f), at(0.46f, 0.0f), color, thickness);
     }
 
-    // Velocimetro com o ponteiro no maximo (estilo turbo/boost).
+    // Velocimetro com o ponteiro no maximo:
     void speed(ImDrawList* draw, ImVec2 center, float size, ImU32 color)
     {
         const float  thickness = strokeWidth(size);
         const float  radius    = size * 0.42f;
         const ImVec2 pivot(center.x, center.y + size * 0.17f);
 
-        // mostrador
+        // marcador
         draw->PathArcTo(pivot, radius, kPi * 0.88f, kPi * 2.12f, 28);
         draw->PathStroke(color, 0, thickness);
 
@@ -63,12 +62,10 @@ namespace icons
         const float angle = -kPi * 0.27f;
         draw->AddLine(pivot, ImVec2(pivot.x + cosf(angle) * radius * 0.78f,
                                     pivot.y + sinf(angle) * radius * 0.78f), color, thickness);
-
-        // eixo do ponteiro
         draw->AddCircleFilled(pivot, thickness, color);
     }
 
-    // Engrenagem: contorno com dentes + furo no meio.
+    // Engrenagem:
     void gear(ImDrawList* draw, ImVec2 center, float size, ImU32 color)
     {
         const int   teeth       = 8;
@@ -96,7 +93,7 @@ namespace icons
         draw->AddCircle(center, holeRadius, color, 0, thickness);
     }
 
-    // Triangulo de aviso com "!" no meio.
+    // Triangulo de aviso com "!" no meio:
     void warning(ImDrawList* draw, ImVec2 center, float size, ImU32 color)
     {
         const float thickness = strokeWidth(size);
@@ -106,8 +103,7 @@ namespace icons
                                      point(center, size, -0.50f,  0.40f) };
         draw->AddPolyline(triangle, 3, color, thickness, ImDrawFlags_Closed);
 
-        // Exclamacao em retangulos: AddLine desloca meio pixel e deixaria o
-        // tracinho torto em relacao ao ponto de baixo.
+        // Exclamação:
         const float half   = thickness * 0.5f;
         const ImVec2 top    = point(center, size, 0.0f, -0.17f);
         const ImVec2 bottom = point(center, size, 0.0f,  0.10f);

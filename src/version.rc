@@ -1,7 +1,7 @@
 #include <winver.h>
 
-// Informacoes que o Windows mostra no Gerenciador de Tarefas e nas
-// propriedades do arquivo. E daqui que sai o nome "FPS Booster".
+// Informações que aparecem no gerenciador de tarefas
+// e nas propriedades do arquivo.
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION    0,1,0,0
  PRODUCTVERSION 0,1,0,0
@@ -13,14 +13,14 @@ VS_VERSION_INFO VERSIONINFO
 BEGIN
     BLOCK "StringFileInfo"
     BEGIN
-        BLOCK "041604B0"    // portugues do Brasil, Unicode
+        BLOCK "041604B0"
         BEGIN
             VALUE "FileDescription",  "FPS Booster"
-            VALUE "FileVersion",      "0.1.0"
+            VALUE "FileVersion",      "0.1.5"
             VALUE "InternalName",     "fpsbooster"
             VALUE "OriginalFilename", "fpsbooster.exe"
             VALUE "ProductName",      "FPS Booster"
-            VALUE "ProductVersion",   "alpha v0.1.0"
+            VALUE "ProductVersion",   "alpha v0.1.5"
         END
     END
     BLOCK "VarFileInfo"

@@ -8,6 +8,7 @@
 #include <shellapi.h>
 #include <objbase.h>
 
+#include <array>
 #include <atomic>
 #include <cstdio>
 #include <filesystem>
@@ -20,7 +21,14 @@ namespace fs = std::filesystem;
 
 namespace
 {
-    // Filtro opcional de arquivos: devolve true para os que devem ser apagados.
+    // Resultado de uma limpeza.
+    struct CleanResult
+    {
+        int filesDeleted = 0; // arquivos/pastas apagados
+        int filesLocked  = 0; // itens em uso que foram ignorados
+        unsigned long long bytesFreed = 0; // espaco liberado
+    };
+
     using FileFilter = bool (*)(const fs::path&);
 
     std::thread       g_worker;
@@ -28,7 +36,7 @@ namespace
     std::mutex        g_statusMutex;
     std::string       g_status;
 
-    // Caminho de %TEMP% (pasta temporaria do usuario).
+    // Caminho da %temp%
     fs::path userTempFolder()
     {
         wchar_t buffer[MAX_PATH + 1] = {};
@@ -36,7 +44,7 @@ namespace
         return (length > 0) ? fs::path(buffer) : fs::path();
     }
 
-    // Caminho da pasta do Windows (normalmente C:\Windows).
+    // Caminho da pasta do Windows (C:\Windows)
     fs::path windowsFolder()
     {
         wchar_t buffer[MAX_PATH + 1] = {};
@@ -44,7 +52,7 @@ namespace
         return (length > 0) ? fs::path(buffer) : fs::path();
     }
 
-    // Caminho de %LOCALAPPDATA%.
+    // Caminho de %localappdata%.
     fs::path localAppDataFolder()
     {
         wchar_t buffer[MAX_PATH + 1] = {};
@@ -117,7 +125,6 @@ namespace
         if (folder.empty() || !fs::is_directory(folder, error))
             return;
 
-        // seguranca: nunca trabalhar na raiz de um disco
         if (!folder.has_parent_path() || folder.parent_path() == folder)
             return;
 
@@ -145,7 +152,7 @@ namespace
 
             if (removeError || removed == static_cast<std::uintmax_t>(-1))
             {
-                result.filesLocked++;                       // arquivo em uso pelo Windows
+                result.filesLocked++;
                 continue;
             }
 
@@ -183,7 +190,6 @@ namespace
                 if (_wcsicmp(entry.szExeFile, L"explorer.exe") != 0)
                     continue;
 
-                // so o Explorador da sessao atual
                 DWORD session = 0;
                 if (!::ProcessIdToSessionId(entry.th32ProcessID, &session) || session != currentSession)
                     continue;
@@ -248,70 +254,159 @@ namespace
             // pasta protegida: ignora
         }
     }
-}
 
-void cleanTemp(CleanResult& result)
-{
-    clearFolder(userTempFolder(), result);                  // %TEMP%
-
-    const fs::path windows = windowsFolder();
-    if (!windows.empty())
-        clearFolder(windows / L"Temp", result);             // C:\Windows\Temp (precisa de admin)
-}
-
-void cleanPrefetch(CleanResult& result)
-{
-    const fs::path windows = windowsFolder();
-    if (windows.empty())
-        return;
-
-    clearFolder(windows / L"Prefetch", result, isPrefetchFile);   // precisa de admin
-}
-
-void cleanScreenshotsCache(CleanResult& result)
-{
-    const fs::path localAppData = localAppDataFolder();
-    if (localAppData.empty())
-        return;
-
-    // prints temporarias da Ferramenta de Captura
-    clearSnippingToolTemp(localAppData, result);
-
-    // As miniaturas ficam abertas pelo Explorador de Arquivos, entao ele e
-    // fechado antes da limpeza e volta logo em seguida (a barra de tarefas pisca).
-    const bool explorerStopped = stopExplorer();
-    if (explorerStopped)
-        ::Sleep(300);
-
-    clearFolder(localAppData / L"Microsoft" / L"Windows" / L"Explorer", result, isThumbnailCacheFile);
-
-    if (explorerStopped)
-        startExplorer();
-}
-
-void cleanRecycleBin(CleanResult& result)
-{
-    // as funcoes de shell precisam de COM iniciado na thread que chama
-    const HRESULT com = ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
-
-    // consulta antes de esvaziar, que e a unica forma de saber quanto foi liberado
-    SHQUERYRBINFO info = {};
-    info.cbSize = sizeof(info);
-    const bool counted = SUCCEEDED(::SHQueryRecycleBinW(nullptr, &info));
-
-    const HRESULT emptied = ::SHEmptyRecycleBinW(nullptr, nullptr,
-                                                 SHERB_NOCONFIRMATION | SHERB_NOPROGRESSUI | SHERB_NOSOUND);
-    if (SUCCEEDED(emptied) && counted)
+    std::string formatSize(unsigned long long bytes)
     {
-        result.filesDeleted += static_cast<int>(info.i64NumItems);
-        result.bytesFreed   += static_cast<unsigned long long>(info.i64Size);
+        const char* units[] = { "B", "KB", "MB", "GB", "TB" };
+        double value = static_cast<double>(bytes);
+        int unit = 0;
+
+        while (value >= 1024.0 && unit < 4)
+        {
+            value /= 1024.0;
+            unit++;
+        }
+
+        char buffer[64];
+        std::snprintf(buffer, sizeof(buffer), (unit == 0) ? "%.0f %s" : "%.1f %s", value, units[unit]);
+        return std::string(buffer);
     }
 
-    if (SUCCEEDED(com))
-        ::CoUninitialize();
+    // =======================================================================
+    //  Operacoes de limpeza
+    // =======================================================================
+
+    // Apaga os arquivos de %temp% e de C:\Windows\Temp.
+    void cleanTemp(CleanResult& result)
+    {
+        clearFolder(userTempFolder(), result);
+
+        const fs::path windows = windowsFolder();
+        if (!windows.empty())
+            clearFolder(windows / L"Temp", result);
+    }
+
+    // Apaga os arquivos .pf de C:\Windows\Prefetch.
+    void cleanPrefetch(CleanResult& result)
+    {
+        const fs::path windows = windowsFolder();
+        if (windows.empty())
+            return;
+
+        clearFolder(windows / L"Prefetch", result, isPrefetchFile);
+    }
+
+    // Apaga o cache de miniaturas do Explorador e as prints temporarias da
+    // Ferramenta de Captura. O explorer é fechado e reaberto para liberar os
+    // arquivos, então a barra de tarefas pisca durante essa limpeza.
+    void cleanScreenshotsCache(CleanResult& result)
+    {
+        const fs::path localAppData = localAppDataFolder();
+        if (localAppData.empty())
+            return;
+
+        clearSnippingToolTemp(localAppData, result);
+
+        const bool explorerStopped = stopExplorer();
+        if (explorerStopped)
+            ::Sleep(300);
+
+        clearFolder(localAppData / L"Microsoft" / L"Windows" / L"Explorer", result, isThumbnailCacheFile);
+
+        if (explorerStopped)
+            startExplorer();
+    }
+
+    // Esvazia a Lixeira do Windows.
+    void cleanRecycleBin(CleanResult& result)
+    {
+        const HRESULT com = ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+
+        // Consulta antes de esvaziar, para saber quanto espaço foi liberado
+        SHQUERYRBINFO info = {};
+        info.cbSize = sizeof(info);
+        const bool counted = SUCCEEDED(::SHQueryRecycleBinW(nullptr, &info));
+
+        const HRESULT emptied = ::SHEmptyRecycleBinW(nullptr, nullptr,
+                                                     SHERB_NOCONFIRMATION | SHERB_NOPROGRESSUI | SHERB_NOSOUND);
+        if (SUCCEEDED(emptied) && counted)
+        {
+            result.filesDeleted += static_cast<int>(info.i64NumItems);
+            result.bytesFreed   += static_cast<unsigned long long>(info.i64Size);
+        }
+
+        if (SUCCEEDED(com))
+            ::CoUninitialize();
+    }
+
+    // =======================================================================
+    //  Funções da aba de limpeza
+    // =======================================================================
+    struct CleanTask
+    {
+        const char* label;
+        const char* description;
+        const char* warning;
+        bool defaultOn;
+        void (*run)(CleanResult&);
+    };
+
+    const CleanTask kCleanTasks[] =
+    {
+        { "Limpar arquivos temporários", "Apaga todos arquivos de C:\\Windows\\Temp e %temp%.",
+          nullptr, true, cleanTemp },
+
+        { "Limpar prefetch", "Apaga todos arquivos de C:\\Windows\\Prefetch.",
+          nullptr, true, cleanPrefetch },
+
+        { "Limpar cache de screenshots",
+          "Apaga as miniaturas que o Windows gera e usa no Explorador de Arquivos, "
+          "junto com as prints temporarias da Ferramenta de Captura.",
+          "Essa operação irá piscar sua barra de tarefas, não se assuste, é normal.",
+          true, cleanScreenshotsCache },
+
+        { "Esvaziar lixeira", "Apaga todos arquivos da lixeira.",
+          "Não habilite essa opção a não ser que tenha certeza de que não há arquivos importantes na lixeira.",
+          false, cleanRecycleBin },
+    };
+
+    constexpr int kCount = static_cast<int>(std::size(kCleanTasks));
+
+    std::array<bool, kCount> makeDefaults()
+    {
+        std::array<bool, kCount> defaults{};
+        for (int i = 0; i < kCount; ++i)
+            defaults[i] = kCleanTasks[i].defaultOn;
+        return defaults;
+    }
+    std::array<bool, kCount> g_selected = makeDefaults();
 }
 
-void startCleaning(const CleanOptions& options)
+int cleanTaskCount()
+{
+    return kCount;
+}
+
+CleanTaskInfo cleanTaskInfo(int index)
+{
+    if (index < 0 || index >= kCount)
+        return { "", "", nullptr };
+    const CleanTask& task = kCleanTasks[index];
+    return { task.label, task.description, task.warning };
+}
+
+bool cleanTaskEnabled(int index)
+{
+    return (index >= 0 && index < kCount) && g_selected[index];
+}
+
+void setCleanTaskEnabled(int index, bool enabled)
+{
+    if (index >= 0 && index < kCount)
+        g_selected[index] = enabled;
+}
+
+void startCleaning()
 {
     if (g_busy.load())
         return;
@@ -322,17 +417,13 @@ void startCleaning(const CleanOptions& options)
     g_busy.store(true);
     setStatus("");
 
-    g_worker = std::thread([options]()
+    const std::array<bool, kCount> selected = g_selected;
+    g_worker = std::thread([selected]()
     {
         CleanResult result;
-        if (options.temp)
-            cleanTemp(result);
-        if (options.prefetch)
-            cleanPrefetch(result);
-        if (options.screenshots)
-            cleanScreenshotsCache(result);
-        if (options.recycleBin)
-            cleanRecycleBin(result);
+        for (int i = 0; i < kCount; ++i)
+            if (selected[i])
+                kCleanTasks[i].run(result);
 
         std::string text = std::to_string(result.filesDeleted) + " itens apagados, " +
                            formatSize(result.bytesFreed) + " liberados.";
@@ -359,21 +450,4 @@ void shutdownCleaner()
 {
     if (g_worker.joinable())
         g_worker.join();
-}
-
-std::string formatSize(unsigned long long bytes)
-{
-    const char* units[] = { "B", "KB", "MB", "GB", "TB" };
-    double value = static_cast<double>(bytes);
-    int unit = 0;
-
-    while (value >= 1024.0 && unit < 4)
-    {
-        value /= 1024.0;
-        unit++;
-    }
-
-    char buffer[64];
-    std::snprintf(buffer, sizeof(buffer), (unit == 0) ? "%.0f %s" : "%.1f %s", value, units[unit]);
-    return std::string(buffer);
 }

@@ -49,20 +49,14 @@ namespace
 
     constexpr float kRgbSpeed       = 0.15f;    // voltas por segundo do modo RGB
 
-    // -----------------------------------------------------------------------
-    //  Estado
-    // -----------------------------------------------------------------------
     enum class Tab { cleaning, optimization, settings };
 
-    // O que esta marcado em cada interruptor do menu.
+    // Ajustes do proprio programa (nao sao tweaks do Windows; ficam aqui na UI).
+    // As limpezas e otimizacoes moram nas tabelas do cleaner.cpp e optimizer.cpp.
     struct Options
     {
-        bool cleanTemp        = true;
-        bool cleanPrefetch    = true;
-        bool cleanScreenshots = true;
-        bool emptyRecycleBin  = false;
-        bool pinWindow        = false;
-        bool rgbMode          = false;
+        bool pinWindow = false;
+        bool rgbMode   = false;
     };
 
     Tab        g_tab    = Tab::cleaning;
@@ -153,7 +147,6 @@ namespace
         return pressed;
     }
 
-    // Quadrado de cantos arredondados que abre o seletor de cores.
     bool colorSwatch(const char* id, ImVec4* color)
     {
         const float size     = px(kSwatchSize);
@@ -310,23 +303,16 @@ namespace
     // -----------------------------------------------------------------------
     //  Conteudo dos paineis
     // -----------------------------------------------------------------------
+    // Uma linha por tarefa de limpeza, lidas da tabela do cleaner.
     void drawCleaningPanel()
     {
-        option("Limpar arquivos temporários", "Apaga todos arquivos de C:\\Windows\\Temp e %temp%.",
-               &g_options.cleanTemp);
-
-        option("Limpar prefetch", "Apaga todos arquivos de C:\\Windows\\Prefetch.",
-               &g_options.cleanPrefetch);
-
-        option("Limpar cache de screenshots",
-               "Apaga as miniaturas que o Windows gera e usa no Explorador de Arquivos, "
-               "junto com as prints temporarias da Ferramenta de Captura.",
-               &g_options.cleanScreenshots,
-               "Essa operação irá piscar sua barra de tarefas, não se assuste, é normal.");
-
-        option("Esvaziar lixeira", "Apaga todos arquivos da lixeira.",
-               &g_options.emptyRecycleBin,
-               "Não habilite essa opção a não ser que tenha certeza de que não há arquivos importantes na lixeira.");
+        for (int i = 0; i < cleanTaskCount(); ++i)
+        {
+            const CleanTaskInfo task = cleanTaskInfo(i);
+            bool enabled = cleanTaskEnabled(i);
+            if (option(task.label, task.description, &enabled, task.warning))
+                setCleanTaskEnabled(i, enabled);
+        }
     }
 
     // Rodape do painel de limpeza: resultado a esquerda, botao a direita.
@@ -352,60 +338,60 @@ namespace
             ImGui::PopFont();
         }
 
-        const bool busy    = isCleaning();
-        const bool nothing = !g_options.cleanTemp && !g_options.cleanPrefetch &&
-                             !g_options.cleanScreenshots && !g_options.emptyRecycleBin;
+        const bool busy = isCleaning();
+
+        bool nothing = true;
+        for (int i = 0; i < cleanTaskCount(); ++i)
+            if (cleanTaskEnabled(i))
+            {
+                nothing = false;
+                break;
+            }
 
         ImGui::SetCursorPos(ImVec2(startX + areaWidth - buttonWidth, startY + (areaHeight - buttonHeight) * 0.5f));
         ImGui::BeginDisabled(busy || nothing);
         if (accentIconButton("limpar", busy ? "Limpando..." : "Limpar selecionados", icons::brush,
                              ImVec2(buttonWidth, buttonHeight)))
-        {
-            CleanOptions options;
-            options.temp        = g_options.cleanTemp;
-            options.prefetch    = g_options.cleanPrefetch;
-            options.screenshots = g_options.cleanScreenshots;
-            options.recycleBin  = g_options.emptyRecycleBin;
-            startCleaning(options);
-        }
+            startCleaning();
         ImGui::EndDisabled();
     }
 
     // -----------------------------------------------------------------------
     //  Cartoes da aba de otimizacoes
     // -----------------------------------------------------------------------
-    // cores da bolinha de situacao dos cartoes
+    // Circulo de situacao dos cartoes
     constexpr unsigned int kStatusOk      = 0x16DB65;   // removivel e removido
     constexpr unsigned int kStatusRunning = 0xFFC53D;   // removendo
     constexpr unsigned int kStatusFailed  = 0xFC2D38;   // falhou
 
-    struct OptimizationCard
+    // Cor do circulo e do texto de situação, conforme o tom do cartao.
+    ImVec4 toneColor(CardTone tone)
     {
-        const char*  title;
-        const char*  description;
-        const char*  blocked;     // aviso quando o programa nao existe no Windows
-        Optimization item;
-    };
+        switch (tone)
+        {
+        case CardTone::good: return hexColor(kStatusOk);
+        case CardTone::busy: return hexColor(kStatusRunning);
+        case CardTone::bad:  return hexColor(kStatusFailed);
+        case CardTone::neutral:
+        default:             return g_theme.textDim;
+        }
+    }
 
-    const OptimizationCard kOptimizationCards[] =
+    // Altura da faixa de baixo do cartao: o botao, ou ate duas linhas de situação
+    // (a situação pode ser uma frase mais longa, como "Removido. Reinicie...").
+    float cardBottomBand()
     {
-        { "Remover Cortana",
-          "Remove a Cortana permanentemente do seu computador.",
-          "A Cortana não foi encontrada no seu computador.",
-          Optimization::removeCortana },
-
-        { "Remover Copilot",
-          "Remove o Copilot permanentemente do seu computador.",
-          "O Copilot não foi encontrado no seu computador.",
-          Optimization::removeCopilot },
-    };
+        ImGui::PushFont(nullptr, kFontSmall);
+        const float twoLines = ImGui::GetTextLineHeight() * 2.0f;
+        ImGui::PopFont();
+        return (twoLines > px(kCardButton)) ? twoLines : px(kCardButton);
+    }
 
     // Um cartao: nome e descricao em cima, situacao e botao na base.
-    void drawOptimizationCard(const OptimizationCard& card, const ImVec2& size)
+    void drawOptimizationCard(int index, const ImVec2& size)
     {
-        const OptimizationState state = optimizationState(card.item);
-        const bool running   = (state == OptimizationState::running);
-        const bool available = (state == OptimizationState::available || state == OptimizationState::failed);
+        const OptimizationCard card = optimizationCard(index);
+        const CardInfo         info = optimizationInfo(index);
 
         ImGui::PushStyleColor(ImGuiCol_ChildBg, g_theme.panel);
         ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, px(kPanelRounding));
@@ -417,10 +403,10 @@ namespace
 
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(px(kItemSpacingX), px(4.0f)));
 
-        const float left         = ImGui::GetCursorPosX();
-        const float cardWidth    = ImGui::GetContentRegionAvail().x;
-        const float buttonWidth  = ImGui::CalcTextSize("Removendo...").x + px(28.0f);
-        const float buttonHeight = px(kCardButton);
+        const float left        = ImGui::GetCursorPosX();
+        const float cardWidth   = ImGui::GetContentRegionAvail().x;
+        const float buttonWidth = ImGui::CalcTextSize("Remover").x + px(28.0f);
+        const float band        = cardBottomBand();
 
         ImGui::PushFont(g_fontBold, 0.0f);
         ImGui::TextUnformatted(card.title);
@@ -434,27 +420,17 @@ namespace
         ImGui::PopStyleColor();
         ImGui::PopFont();
 
-        const char* statusText  = "Pronto pra remover";
-        ImVec4      statusColor = hexColor(kStatusOk);
-        switch (state)
-        {
-        case OptimizationState::missing: statusText = "Não foi encontrado no seu computador.";      statusColor = g_theme.textDim;          break;
-        case OptimizationState::running: statusText = "Removendo...";                              statusColor = hexColor(kStatusRunning); break;
-        case OptimizationState::done:    statusText = "Removido. Reinicie o computador para concluir.";  statusColor = hexColor(kStatusOk);      break;
-        case OptimizationState::failed:  statusText = "Não foi possível remover.";                  statusColor = hexColor(kStatusFailed);  break;
-        default: break;
-        }
+        const ImVec4 statusColor = toneColor(info.tone);
+        const float  bottom      = size.y - px(kCardPadding) - band;
 
-        // base do cartao: situacao a esquerda, botao a direita
-        const float bottom = size.y - px(kCardPadding) - buttonHeight;
-
+        // situacao a esquerda, com a bolinha colorida
         ImGui::PushFont(nullptr, kFontSmall);
         const float dot          = px(3.5f);
         const float textLeft     = left + dot * 2.0f + px(7.0f);
-        const float statusRight  = left + cardWidth - buttonWidth - px(12.0f);
-        const float statusHeight = ImGui::CalcTextSize(statusText, nullptr, false, statusRight - textLeft).y;
+        const float statusRight   = left + cardWidth - buttonWidth - px(12.0f);
+        const float statusHeight = ImGui::CalcTextSize(info.status.c_str(), nullptr, false, statusRight - textLeft).y;
 
-        ImGui::SetCursorPos(ImVec2(left, bottom + (buttonHeight - statusHeight) * 0.5f));
+        ImGui::SetCursorPos(ImVec2(left, bottom + (band - statusHeight) * 0.5f));
         const ImVec2 position = ImGui::GetCursorScreenPos();
         ImGui::GetWindowDrawList()->AddCircleFilled(ImVec2(position.x + dot, position.y + ImGui::GetTextLineHeight() * 0.5f),
                                                     dot, u32(statusColor));
@@ -462,19 +438,20 @@ namespace
         ImGui::SetCursorPosX(textLeft);
         ImGui::PushStyleColor(ImGuiCol_Text, statusColor);
         ImGui::PushTextWrapPos(statusRight);
-        ImGui::TextUnformatted(statusText);
+        ImGui::TextUnformatted(info.status.c_str());
         ImGui::PopTextWrapPos();
         ImGui::PopStyleColor();
         ImGui::PopFont();
 
-        ImGui::SetCursorPos(ImVec2(left + cardWidth - buttonWidth, bottom));
-        ImGui::BeginDisabled(!available || isOptimizing());
-        if (accentButton(running ? "Removendo..." : "Remover", ImVec2(buttonWidth, buttonHeight)))
-            startOptimization(card.item);
+        // botao a direita, centralizado na faixa de baixo
+        ImGui::SetCursorPos(ImVec2(left + cardWidth - buttonWidth, bottom + (band - px(kCardButton)) * 0.5f));
+        ImGui::BeginDisabled(!info.buttonEnabled || isOptimizing());
+        if (accentButton(info.buttonLabel, ImVec2(buttonWidth, px(kCardButton))))
+            startOptimization(index);
         ImGui::EndDisabled();
 
-        if (state == OptimizationState::missing && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-            ImGui::SetTooltip("%s", card.blocked);
+        if (info.tooltip != nullptr && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+            ImGui::SetTooltip("%s", info.tooltip);
 
         ImGui::PopStyleVar();
         ImGui::EndChild();
@@ -493,10 +470,12 @@ namespace
         const float titleHeight = ImGui::GetTextLineHeight();
         float description = 0.0f;
 
+        const int count = optimizationCount();
+
         ImGui::PushFont(nullptr, kFontSmall);
-        for (int i = 0; i < IM_ARRAYSIZE(kOptimizationCards); ++i)
+        for (int i = 0; i < count; ++i)
         {
-            const float height = ImGui::CalcTextSize(kOptimizationCards[i].description, nullptr, false,
+            const float height = ImGui::CalcTextSize(optimizationCard(i).description, nullptr, false,
                                                      width - px(kCardPadding) * 2.0f).y;
             if (height > description)
                 description = height;
@@ -504,14 +483,14 @@ namespace
         ImGui::PopFont();
 
         const ImVec2 size(width, px(kCardPadding) * 2.0f + titleHeight + px(4.0f) + description +
-                                 px(14.0f) + px(kCardButton));
+                                 px(14.0f) + cardBottomBand());
 
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(spacing, spacing));
-        for (int i = 0; i < IM_ARRAYSIZE(kOptimizationCards); ++i)
+        for (int i = 0; i < count; ++i)
         {
             if (i % columns != 0)
                 ImGui::SameLine();
-            drawOptimizationCard(kOptimizationCards[i], size);
+            drawOptimizationCard(i, size);
         }
         ImGui::PopStyleVar();
 
@@ -810,13 +789,11 @@ namespace
         const ImVec2 origin = ImGui::GetWindowPos();
         const float  width  = ImGui::GetWindowWidth();
 
-        // area livre para arrastar a janela
         const float dragWidth = (width - buttonsWidth > 1.0f) ? (width - buttonsWidth) : 1.0f;
         ImGui::SetCursorPos(ImVec2(0.0f, 0.0f));
         ImGui::InvisibleButton("##drag", ImVec2(dragWidth, height));
         dragWindow();
 
-        // marcador colorido + nome do programa
         ImGui::GetWindowDrawList()->AddRectFilled(ImVec2(origin.x + px(18.0f), origin.y + height * 0.5f - px(7.0f)),
                                                   ImVec2(origin.x + px(21.0f), origin.y + height * 0.5f + px(7.0f)),
                                                   u32(g_theme.accent), px(2.0f));
@@ -830,7 +807,7 @@ namespace
         ImGui::PushFont(nullptr, kFontSmall);
         ImGui::SetCursorPos(ImVec2(afterTitle + px(8.0f), (height - ImGui::GetTextLineHeight()) * 0.5f));
         ImGui::PushStyleColor(ImGuiCol_Text, g_theme.textDim);
-        ImGui::TextUnformatted("alpha v0.1.0");
+        ImGui::TextUnformatted("alpha v0.1.5");
         ImGui::PopStyleColor();
         ImGui::PopFont();
 
@@ -845,9 +822,6 @@ namespace
         ImGui::EndChild();
     }
 
-    // -----------------------------------------------------------------------
-    //  Corpo: tabs na esquerda, paineis na direita
-    // -----------------------------------------------------------------------
     void drawContent()
     {
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(px(kContentPad), px(kContentPad)));
@@ -871,7 +845,6 @@ namespace
         ImGui::BeginChild("body", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
         ImGui::PopStyleVar();
 
-        // divisoria entre as tabs e os paineis
         const ImVec2 origin  = ImGui::GetWindowPos();
         const ImVec2 size    = ImGui::GetWindowSize();
         const float  divider = origin.x + px(kSidebarWidth);
@@ -892,7 +865,7 @@ void initMenu(float dpiScale)
     g_uiScale = dpiScale;
 
     // =======================================================================
-    //  CORES DO MENU  (formato 0xRRGGBB) - mude aqui para trocar a aparencia
+    //  CORES DO MENU  (formato 0xRRGGBB) - mude aqui a aparência
     // =======================================================================
     g_theme.background           = hexColor(0x131313);  // fundo da janela e da coluna das tabs
     g_theme.panel                = hexColor(0x1D1D1D);  // fundo dos paineis (contraste)
@@ -970,7 +943,6 @@ void drawMenu(AppWindow& window)
     ImGui::SetCursorPos(ImVec2(0.0f, headerBottom + 1.0f));
     drawBody();
 
-    // borda fina em volta da janela
     ImGui::GetWindowDrawList()->AddRect(viewport->Pos,
                                         ImVec2(viewport->Pos.x + viewport->Size.x, viewport->Pos.y + viewport->Size.y),
                                         u32(g_theme.border));
