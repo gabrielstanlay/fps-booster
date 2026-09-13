@@ -42,7 +42,6 @@
 // to a better solution or official support for them.
 
 /*
-
 Index of this file:
 
 DOCUMENTATION
